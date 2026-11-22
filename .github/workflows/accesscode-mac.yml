@@ -24,6 +24,7 @@ jobs:
     environment: accesscode-beta
     env:
       OPENCODE_TARGET: darwin-arm64
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
     steps:
       - name: Check Apple signing credentials
         env:
