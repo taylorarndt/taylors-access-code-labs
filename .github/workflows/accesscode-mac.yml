@@ -1,11 +1,4 @@
-# AccessCode Mac releases.
-#
-# - Releases only run by hand. Pushes to main never publish anything.
-# - Running this workflow with "beta" publishes a signed, notarized beta as a GitHub prerelease
-#   (AccessCode Beta, its own app next to the stable one).
-# - Running it with "stable" publishes a stable release. The accesscode-release environment
-#   limits who can approve that run to Taylor, Jeff and repo admins.
-#
+# Taylor's Access Code Labs experimental Mac prereleases.
 # Repository secrets:
 #   APPLE_SIGNING_CERTIFICATE           base64 of the Developer ID Application .p12
 #   APPLE_SIGNING_CERTIFICATE_PASSWORD  password of that .p12
@@ -13,67 +6,47 @@
 #   APPLE_NOTARY_KEY_ID                 that key's ID
 #   APPLE_NOTARY_ISSUER_ID              that key's issuer ID
 #   ACCESSCODE_GITHUB_CLIENT_SECRET     GitHub OAuth app secret the GitHub MCP sign-in uses (optional)
-name: AccessCode Mac
+name: Taylor's Access Code Labs Mac beta
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
-    inputs:
-      channel:
-        description: "beta or stable"
-        type: choice
-        options: [beta, stable]
-        default: beta
-
-concurrency:
-  group: accesscode-mac-${{ inputs.channel }}
-  cancel-in-progress: false
 
 permissions:
   contents: write
 
 jobs:
-  # Until the signing secrets are added, runs skip the build instead of failing.
-  ready:
-    if: github.repository == 'Community-Access/access-code'
-    runs-on: ubuntu-latest
-    outputs:
-      signing: ${{ steps.check.outputs.signing }}
-    steps:
-      - id: check
-        run: |
-          if [ -n "$CERTIFICATE" ] && [ -n "$NOTARY_KEY" ]; then echo "signing=true" >> "$GITHUB_OUTPUT"; else
-            echo "::notice::Mac signing secrets are not set yet, so no Mac build runs."
-            echo "signing=false" >> "$GITHUB_OUTPUT"
-          fi
-        env:
-          CERTIFICATE: ${{ secrets.APPLE_SIGNING_CERTIFICATE }}
-          NOTARY_KEY: ${{ secrets.APPLE_NOTARY_KEY }}
-
   mac:
-    needs: ready
-    if: needs.ready.outputs.signing == 'true'
+    if: github.repository == 'taylorarndt/taylors-access-code-labs' && github.ref == 'refs/heads/main'
     runs-on: macos-15
     timeout-minutes: 120
-    environment: ${{ inputs.channel == 'stable' && 'accesscode-release' || 'accesscode-beta' }}
+    environment: accesscode-beta
     env:
-      STABLE: ${{ inputs.channel == 'stable' }}
       OPENCODE_TARGET: darwin-arm64
     steps:
+      - name: Check Apple signing credentials
+        env:
+          APPLE_SIGNING_CERTIFICATE: ${{ secrets.APPLE_SIGNING_CERTIFICATE }}
+          APPLE_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_SIGNING_CERTIFICATE_PASSWORD }}
+          APPLE_NOTARY_KEY: ${{ secrets.APPLE_NOTARY_KEY }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+        run: |
+          for key in APPLE_SIGNING_CERTIFICATE APPLE_SIGNING_CERTIFICATE_PASSWORD APPLE_NOTARY_KEY APPLE_NOTARY_KEY_ID APPLE_NOTARY_ISSUER_ID; do
+            if [[ -z "${!key}" ]]; then
+              echo "::error::Configure the $key secret for the Labs Mac beta."
+              exit 1
+            fi
+          done
+
       - name: Check out
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       - name: Choose version and channel
         run: |
           base=$(jq -r .version packages/desktop/package.json)
-          if [ "$STABLE" = true ]; then
-            version=$base channel=prod tag="accesscode-$base"
-            if gh release view "$tag" > /dev/null 2>&1; then
-              echo "::error::Release $tag already exists. Merge a newer OpenCode release first."
-              exit 1
-            fi
-          else
-            version="$base-beta.$GITHUB_RUN_NUMBER" channel=beta tag="accesscode-$base-beta.$GITHUB_RUN_NUMBER"
-          fi
+          version="$base-beta.$GITHUB_RUN_NUMBER" channel=beta tag="labs-mac-$base-beta.$GITHUB_RUN_NUMBER"
           {
             echo "OPENCODE_VERSION=$version"
             echo "OPENCODE_CHANNEL=$channel"
@@ -134,12 +107,12 @@ jobs:
 
       - name: Publish the release
         run: |
-          name=$([ "$STABLE" = true ] && echo AccessCode || echo "AccessCode Beta")
+          name="Taylor's Access Code Labs Beta"
           mkdir -p "$RUNNER_TEMP/release"
           cp "$RUNNER_TEMP/out/opencode-desktop-mac-arm64.dmg" "$RUNNER_TEMP/release/$(echo "$name" | tr ' ' '-')-mac-arm64.dmg"
           cp "$RUNNER_TEMP/out/opencode-desktop-mac-arm64.zip" "$RUNNER_TEMP/release/$(echo "$name" | tr ' ' '-')-mac-arm64.zip"
           flags=(--target "$GITHUB_SHA" --title "$name $OPENCODE_VERSION" --generate-notes)
-          if [ "$STABLE" = true ]; then flags+=(--latest); else flags+=(--prerelease); fi
+          flags+=(--prerelease --latest=false)
           gh release create "$RELEASE_TAG" "${flags[@]}" "$RUNNER_TEMP"/release/*
         env:
           GH_TOKEN: ${{ github.token }}
