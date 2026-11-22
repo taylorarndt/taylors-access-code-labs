@@ -28,7 +28,8 @@ jobs:
     environment: accesscode-beta
     env:
       OPENCODE_TARGET: darwin-arm64
-      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+      # The voice helper requires Swift 6.2; macos-15 defaults to Xcode 16.4 (Swift 6.1).
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
     steps:
       - name: Check Apple signing credentials
         env:
@@ -47,6 +48,11 @@ jobs:
 
       - name: Check out
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Show Xcode and Swift versions
+        run: |
+          xcodebuild -version
+          xcrun swift --version
 
       - name: Choose version and channel
         run: |
