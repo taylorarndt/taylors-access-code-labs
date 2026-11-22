@@ -1,6 +1,6 @@
 # Taylor's Access Code Labs
 
-I’m Taylor, and this is my fork of [Community Access’s AccessCode](https://github.com/Community-Access/access-code). I’m one of the maintainers of AccessCode. Labs gives me a place to try out Mac features and see how they work for people. Some may find their way into AccessCode if the other maintainers and I think they’re a good fit. Others can stay here.
+I’m Taylor, and this is my fork of [Community Access’s AccessCode](https://github.com/Community-Access/access-code). I try out my Mac ideas here. Some make their way into the main project, and some stay in Labs. You can keep both apps installed and try a Labs beta alongside the stable version of AccessCode.
 
 If you have an idea, run into a bug, or want to work on a feature with me, you’re welcome to open an issue or send a pull request. Feedback from people trying the Mac betas is especially welcome.
 
