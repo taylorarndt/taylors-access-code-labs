@@ -1,4 +1,8 @@
-# AccessCode
+# Taylor's Access Code Labs
+
+I’m Taylor, and this is where I try out features I’d like to add to AccessCode. If you have an idea, run into a bug, or want to work on a feature with me, you’re welcome to open an issue or send a pull request. Feedback from people trying the Mac betas is especially welcome.
+
+You can find my experimental Mac builds on the [Labs releases page](https://github.com/taylorarndt/taylors-access-code-labs/releases). The downloads farther down this page come from the [original AccessCode project](https://github.com/Community-Access/access-code).
 
 AccessCode is an AI coding agent built to work well with VoiceOver and other screen readers. It is a version of [OpenCode](https://github.com/anomalyco/opencode), the open source coding agent, with accessibility fixes throughout the desktop app.
 
