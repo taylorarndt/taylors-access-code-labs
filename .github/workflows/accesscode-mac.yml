@@ -81,6 +81,14 @@ jobs:
         timeout-minutes: 60
         run: bun run pack
 
+      - name: Verify Mac app switcher name
+        run: |
+          name="Taylor's Access Code Labs Beta"
+          tar -xOf dist/desktop/opencode-desktop-mac-arm64.app.tar "$name.app/Contents/Info.plist" > "$RUNNER_TEMP/app.plist"
+          for key in CFBundleName CFBundleDisplayName; do
+            test "$(plutil -extract "$key" raw "$RUNNER_TEMP/app.plist")" = "$name"
+          done
+
       - name: Import the signing certificate
         run: |
           umask 077

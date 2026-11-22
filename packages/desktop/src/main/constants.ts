@@ -1,4 +1,5 @@
 import { app } from "electron"
+import { betaName } from "../shared/beta-name"
 
 type Channel = "local" | "dev" | "beta" | "prod"
 
@@ -10,7 +11,7 @@ export const VERSION = app.isPackaged ? app.getVersion() : (process.env.OPENCODE
 
 const appNames: Record<string, string> = {
   dev: "AccessCode Dev",
-  beta: "AccessCode Beta",
+  beta: betaName(process.platform),
   prod: "AccessCode",
 }
 

@@ -6,6 +6,7 @@ import { Arch, type Configuration } from "electron-builder"
 import { NativeArch } from "../../script/native-arch"
 import { DESKTOP_NATIVE_ENGLISH } from "@opencode/app/i18n/desktop-native"
 import { CLI_BINARIES, getCurrentCli, nodePtyPackage } from "./script/utils"
+import { betaName } from "./src/shared/beta-name"
 
 const packageDir = path.dirname(fileURLToPath(import.meta.url))
 
@@ -230,8 +231,8 @@ export function getConfig() {
       return {
         ...base,
         appId,
-        productName: "AccessCode Beta",
-        protocols: { name: "AccessCode Beta", schemes: ["opencode"] },
+        productName: betaName(getCurrentCli().os),
+        protocols: { name: betaName(getCurrentCli().os), schemes: ["opencode"] },
         publish: {
           provider: "generic",
           url: "https://github.com/Community-Access/access-code/releases/latest/download/",
