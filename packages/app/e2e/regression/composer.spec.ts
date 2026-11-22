@@ -2,6 +2,7 @@ import { expect, test, type Locator, type Page } from "@playwright/test"
 import { NO_PROVIDER, SERVER, T0, expectPath, holdRoute, pageMessagesFrom, provider, sessionHref } from "../utils/app"
 import { mockWorkspace, openDraft, openSession } from "../utils/workspace"
 import { mockPluginsActivating, type MockServerConfig } from "../utils/mock-server"
+import { expectSessionTitle } from "../utils/waits"
 
 test.use({ permissions: ["clipboard-read", "clipboard-write"] })
 
@@ -1750,4 +1751,169 @@ test("pastes into the composer from the session view but not into other inputs",
   await expect(page.locator("#elsewhere")).toHaveValue("pasted from the timeline")
   await expect(page.locator("#elsewhere")).toBeFocused()
   await expect.poll(() => editor.innerText()).toBe("pasted from the timeline")
+})
+
+test("Shift+Escape moves focus to the active session's editor, keeps its draft and puts the caret at the end", async ({
+  page,
+}) => {
+  const prompts: unknown[] = []
+
+  const { editor } = await openSession(page, {
+    name: "FocusShortcut",
+    sessions: [
+      { id: "ses_focus_first", title: "First focus session" },
+      { id: "ses_focus_second", title: "Second focus session" },
+    ],
+    onPrompt: (input) => void prompts.push(input.body),
+  })
+
+  await editor.fill("hello")
+  await editor.press("Enter")
+  await expect.poll(() => prompts.length).toBe(1)
+
+  // From the conversation: focus lands on the editor itself, the draft stays, and typing goes at its end.
+  await editor.fill("keep this draft")
+  await editor.press("Home")
+  await page.locator('[data-timeline-row="UserMessage"]').click()
+  await expect(editor).not.toBeFocused()
+  await page.keyboard.press("Shift+Escape")
+  await expect(editor).toBeFocused()
+  await expect(editor).toHaveText("keep this draft")
+  await page.keyboard.type("!")
+  await expect(editor).toHaveText("keep this draft!")
+
+  // Already in the editor, the shortcut leaves the caret where the user put it.
+  await editor.press("Home")
+  await page.keyboard.press("Shift+Escape")
+  await expect(editor).toBeFocused()
+  await page.keyboard.type("> ")
+  await expect(editor).toHaveText("> keep this draft!")
+
+  // From another text field.
+  await page.evaluate(() => {
+    const field = document.createElement("input")
+    field.id = "elsewhere"
+    document.body.append(field)
+    field.focus()
+  })
+  await page.keyboard.press("Shift+Escape")
+  await expect(editor).toBeFocused()
+  await expect(page.locator("#elsewhere")).toHaveValue("")
+
+  // An open menu takes the key as Escape: it closes and returns focus to its trigger. The next press reaches the editor.
+  const attach = page.locator('[data-component="composer"]').getByRole("button", { name: "Add images and files" })
+  await attach.click()
+  const menu = page.getByRole("menu")
+  await expect(menu.getByRole("menuitem", { name: "Commands" })).toBeVisible()
+  await page.keyboard.press("Shift+Escape")
+  await expect(menu).toHaveCount(0)
+  await expect(attach).toBeFocused()
+  await page.keyboard.press("Shift+Escape")
+  await expect(editor).toBeFocused()
+
+  // A modal dialog keeps the key and closes as with Escape.
+  await page.locator('[data-component="composer"] [data-action="composer-model"]').click()
+  const models = page.getByRole("dialog", { name: "Select model", exact: true })
+  await expect(models.getByRole("button", { name: "Close", exact: true })).toBeVisible()
+  await expect.poll(() => models.evaluate((element) => element.contains(document.activeElement))).toBe(true)
+  await page.keyboard.press("Shift+Escape")
+  await expect(models).toBeHidden()
+  await expect(editor).toHaveText("> keep this draft!")
+
+  // Another tab's session has its own editor and draft.
+  await page.locator("[data-titlebar-tab-link]").filter({ hasText: "Second focus session" }).click()
+  await expectSessionTitle(page, "Second focus session")
+  await expect(editor).toBeEditable()
+  await editor.fill("second draft")
+  await page.locator("[data-titlebar-tab-link]").filter({ hasText: "Second focus session" }).focus()
+  await page.keyboard.press("Shift+Escape")
+  await expect(editor).toBeFocused()
+  await expect(editor).toHaveText("second draft")
+  await page.locator("[data-titlebar-tab-link]").filter({ hasText: "First focus session" }).click()
+  await expectSessionTitle(page, "First focus session")
+  await page.locator("[data-titlebar-tab-link]").filter({ hasText: "First focus session" }).focus()
+  await page.keyboard.press("Shift+Escape")
+  await expect(editor).toBeFocused()
+  await expect(editor).toHaveText("> keep this draft!")
+  expect(prompts).toHaveLength(1)
+})
+
+test("Shift+Escape never stops a running session from its editor, where Escape does", async ({ page }) => {
+  const sessionID = "ses_focus_running"
+  const interrupts: string[] = []
+
+  const { editor } = await openSession(page, {
+    name: "FocusShortcutRunning",
+    sessions: [{ id: sessionID, title: "Running focus session" }],
+    sessionStatus: { [sessionID]: { type: "running" } },
+  })
+
+  page.on("request", (request) => {
+    if (request.method() === "POST" && new URL(request.url()).pathname === `/api/session/${sessionID}/interrupt`)
+      interrupts.push(request.url())
+  })
+
+  await editor.click()
+  await page.keyboard.press("Shift+Escape")
+  await page.keyboard.type("still here")
+  await expect(editor).toBeFocused()
+  await expect(editor).toHaveText("still here")
+  expect(interrupts).toEqual([])
+
+  await editor.fill("")
+  await page.keyboard.press("Escape")
+  await expect.poll(() => interrupts.length).toBe(1)
+})
+
+test("Shift+Escape with a request dock in place of the editor neither moves focus nor dismisses the request", async ({
+  page,
+}) => {
+  const sessionID = "ses_focus_question"
+  const cancellations: string[] = []
+  await mockWorkspace(page, {
+    name: "FocusShortcutQuestion",
+    sessions: [{ id: sessionID, title: "Question focus session" }],
+    forms: [
+      {
+        id: "frm_focus_question",
+        sessionID,
+        title: "Questions",
+        metadata: { kind: "question" },
+        fields: [
+          {
+            key: "q0",
+            type: "string",
+            title: "Implementation",
+            description: "Which implementation should be used?",
+            options: [
+              { value: "minimal", label: "Minimal", description: "Use the smallest correct change" },
+              { value: "extended", label: "Extended", description: "Include additional behavior" },
+            ],
+            custom: true,
+          },
+        ],
+      },
+    ],
+  })
+  await page.goto(sessionHref(sessionID))
+  await expectSessionTitle(page, "Question focus session")
+  page.on("request", (request) => {
+    if (
+      request.method() === "DELETE" &&
+      new URL(request.url()).pathname === `/api/session/${sessionID}/form/frm_focus_question`
+    )
+      cancellations.push(request.url())
+  })
+
+  const question = page.locator('[data-component="dock-prompt"][data-kind="question"]')
+  const minimal = question.getByRole("radio", { name: /Minimal/ })
+  await minimal.focus()
+  await page.keyboard.press("Shift+Escape")
+  await expect(minimal).toBeFocused()
+  await expect(question).toBeVisible()
+  await expect(page.locator('[data-component="composer-editor"]')).toHaveCount(0)
+  expect(cancellations).toEqual([])
+
+  await page.keyboard.press("Escape")
+  await expect.poll(() => cancellations.length).toBe(1)
 })

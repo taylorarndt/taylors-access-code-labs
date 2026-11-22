@@ -27,7 +27,8 @@ import { createKnownServerSessions, createServerSessionEntries } from "@/shell/c
 import { rankSessionTitle } from "./session-match"
 import { useTabs } from "@/shell/tabs/tabs"
 import type { ComposerAdapter, ComposerControls, ComposerQueue } from "./adapter"
-import { isAttachment } from "./prompt-parts"
+import { isAttachment, promptLength } from "./prompt-parts"
+import { setCursorPosition } from "./editor/dom"
 import { isCommentItem } from "./state"
 import type { PromptHistoryComment } from "./history/entry"
 import { createComposerHistory } from "./history/store"
@@ -577,6 +578,25 @@ export function createComposerModel(adapter: ComposerAdapter, options?: { queue?
   Object.defineProperty(controller, "model", { get: () => adapter.controls().model })
 
   command.register("composer-editor", () => [
+    {
+      id: "prompt.focus",
+      title: language.t("command.prompt.focus"),
+      category: language.t("command.category.view"),
+      keybind: "shift+escape",
+      // Works from text fields elsewhere too, such as a search box or the terminal.
+      editable: true,
+      // A menu, popover or listbox gets the key and treats it as Escape, so it closes and returns focus as usual.
+      skip: (event) =>
+        event.target instanceof Element &&
+        !!event.target.closest('[role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"]'),
+      // Always claims the key: inside the editor Escape would stop a running session, and with no editor (a request
+      // dock or a child session) it would dismiss the request or leave the session.
+      onSelect: () => {
+        if (!editor?.isConnected || !editor.isContentEditable || editor.contains(document.activeElement)) return
+        editor.focus()
+        setCursorPosition(editor, promptLength(prompt.current()))
+      },
+    },
     {
       id: "file.attach",
       title: language.t("prompt.action.attachFile"),
