@@ -430,7 +430,7 @@ for (const direction of ["ltr", "rtl"]) {
         await expect(
           width < 768
             ? page
-                .getByRole("dialog", { name: "Choose model variant", exact: true })
+                .getByRole("dialog", { name: "Choose power", exact: true })
                 .getByRole("button", { name: "high", exact: true })
             : page.getByRole("menuitemradio", { name: "high", exact: true }),
         ).toBeVisible()
@@ -774,6 +774,8 @@ story("keeps default thinking accessible by keyboard without composer hover", as
   // Tab through Add, Agent, and Model to the visually hidden thinking trigger.
   for (let count = 0; count < 4; count++) await page.keyboard.press("Tab")
   await expect(control).toBeFocused()
+  // Screen readers announce the trigger by this name with the current value.
+  await expect(control).toHaveAccessibleName("Power: Default")
   await expect(control).toHaveCSS("opacity", "1")
   await page.keyboard.press("Enter")
   await expect(control).toHaveAttribute("aria-expanded", "true")
@@ -789,6 +791,7 @@ story("keeps default thinking accessible by keyboard without composer hover", as
   await expect(page.getByRole("menuitemradio", { name: "high", exact: true })).toBeFocused()
   await page.keyboard.press("Enter")
   await expect(control).toHaveText("high")
+  await expect(control).toHaveAccessibleName("Power: High")
   await expect(control).toBeFocused()
   await page.keyboard.press("Enter")
   await expect(page.getByRole("menuitemradio", { name: "default", exact: true })).toBeFocused()
@@ -812,7 +815,7 @@ story.describe("mobile variant drawer", () => {
     story(`closes and restores focus when dismissed ${moment} it starts opening`, async ({ mount, page }) => {
       const component = await mount("opencode-composer-flow--model-and-variant")
       const variant = component.locator('[data-action="composer-variant"]')
-      const drawer = page.getByRole("dialog", { name: "Choose model variant", exact: true })
+      const drawer = page.getByRole("dialog", { name: "Choose power", exact: true })
       const high = drawer.getByRole("button", { name: "high", exact: true })
 
       // Load the lazy drawer first so the dismissal below races only the drawer's own transition.

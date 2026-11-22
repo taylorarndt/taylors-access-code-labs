@@ -16,7 +16,7 @@ for (const direction of ["ltr", "rtl"] as const) {
       const variant = composer.locator('[data-action="composer-variant"]')
       await expect(variant).toHaveText("balanced")
       await variant.click()
-      const variants = page.getByRole("dialog", { name: "Choose model variant", exact: true })
+      const variants = page.getByRole("dialog", { name: "Choose power", exact: true })
       await expect(variants.getByRole("button", { name: "balanced", exact: true })).toHaveAttribute(
         "aria-pressed",
         "true",
@@ -341,7 +341,7 @@ test.describe("touch composer pickers", () => {
     const composer = page.locator('[data-component="composer"]')
     const variant = composer.locator('[data-action="composer-variant"]')
     await variant.tap()
-    const variants = page.getByRole("dialog", { name: "Choose model variant", exact: true })
+    const variants = page.getByRole("dialog", { name: "Choose power", exact: true })
     await variants.getByRole("button", { name: "default", exact: true }).tap()
     await expect(variants).toBeHidden()
     await expect(variant).toHaveText("default")
