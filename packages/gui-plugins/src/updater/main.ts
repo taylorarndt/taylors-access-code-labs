@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs"
+import { createRequire } from "node:module"
+import path from "node:path"
 import { dialog } from "electron"
 import { Effect, Exit, Schema, Scope } from "effect"
 import { builtinMainContext } from "@opencode/plugin/gui/builtin"
@@ -9,6 +12,29 @@ import { make } from "./machine"
 const setup: Plugin.MainSetup = async (ctx) => {
   const builtin = builtinMainContext(ctx)
   const build = ctx.app
+  if (build.packaged && build.channel === "beta" && process.platform === "darwin") {
+    const addon = path.join(process.resourcesPath, "labs-sparkle.node")
+    if (existsSync(addon)) {
+      const check: () => void = createRequire(import.meta.url)(addon)
+      // Sparkle owns the native progress, availability and installation dialogs.
+      ctx.provide(Updater, {
+        state: () => ({ status: "idle" }),
+        check: () => {
+          check()
+          return { status: "idle" as const }
+        },
+        install: check,
+      })
+      ctx.add(MenubarItem, (): MenubarItem => ({
+        menu: "app",
+        id: "check",
+        label: ctx.t("menu.check"),
+        after: "about",
+        run: check,
+      }))
+      return
+    }
+  }
   const lifecycle = builtin.lifecycle
   const platformModule =
     build.packaged && build.channel === "prod" && process.platform === "win32" ? await import("./platform") : undefined

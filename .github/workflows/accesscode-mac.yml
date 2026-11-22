@@ -13,6 +13,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: labs-mac-release
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
@@ -76,10 +80,21 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=4096
           ACCESSCODE_GITHUB_CLIENT_SECRET: ${{ secrets.ACCESSCODE_GITHUB_CLIENT_SECRET }}
 
+      - name: Prepare Sparkle distribution
+        run: |
+          mkdir -p "$RUNNER_TEMP/sparkle"
+          cd "$RUNNER_TEMP/sparkle"
+          curl -fLsS --retry 3 -o sparkle.tar.xz https://github.com/sparkle-project/Sparkle/releases/download/2.10.1/Sparkle-2.10.1.tar.xz
+          echo '1a856d2a9edb8e628de88121d7be04cf0e2167f8641650b78fca00b14244cf27  sparkle.tar.xz' | shasum -a 256 -c -
+          tar -xf sparkle.tar.xz
+          echo "SPARKLE_DISTRIBUTION=$RUNNER_TEMP/sparkle" >> "$GITHUB_ENV"
+
       - name: Pack the app
         working-directory: packages/desktop
         timeout-minutes: 60
         run: bun run pack
+        env:
+          SPARKLE_PUBLIC_KEY: ${{ vars.SPARKLE_PUBLIC_KEY }}
 
       - name: Verify Mac app switcher name
         run: |
@@ -114,15 +129,32 @@ jobs:
           APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
           APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
 
+      - name: Sign the Labs update feed
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/feed"
+          cp "$RUNNER_TEMP/out/opencode-desktop-mac-arm64.zip" "$RUNNER_TEMP/feed/Taylor.s-Access-Code-Labs-Beta-mac-arm64.zip"
+          printf '%s' "$SPARKLE_PRIVATE_KEY" | "$SPARKLE_DISTRIBUTION/bin/generate_appcast" --ed-key-file - \
+            --download-url-prefix "https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/" "$RUNNER_TEMP/feed"
+          test -s "$RUNNER_TEMP/feed/appcast.xml"
+          test -n "$(xmllint --xpath 'string(//enclosure/@*[local-name()="edSignature"])' "$RUNNER_TEMP/feed/appcast.xml")"
+
       - name: Publish the release
         run: |
           name="Taylor's Access Code Labs Beta"
           mkdir -p "$RUNNER_TEMP/release"
           cp "$RUNNER_TEMP/out/opencode-desktop-mac-arm64.dmg" "$RUNNER_TEMP/release/$(echo "$name" | tr ' ' '-')-mac-arm64.dmg"
-          cp "$RUNNER_TEMP/out/opencode-desktop-mac-arm64.zip" "$RUNNER_TEMP/release/$(echo "$name" | tr ' ' '-')-mac-arm64.zip"
+          cp "$RUNNER_TEMP/feed/Taylor.s-Access-Code-Labs-Beta-mac-arm64.zip" "$RUNNER_TEMP/release/"
           flags=(--target "$GITHUB_SHA" --title "$name $OPENCODE_VERSION" --generate-notes)
           flags+=(--prerelease --latest=false)
           gh release create "$RELEASE_TAG" "${flags[@]}" "$RUNNER_TEMP"/release/*
+          if gh release view labs-mac-feed >/dev/null 2>&1; then
+            gh release upload labs-mac-feed "$RUNNER_TEMP/feed/appcast.xml" --clobber
+          else
+            gh release create labs-mac-feed --target "$GITHUB_SHA" --title "Labs Mac update feed" --prerelease --latest=false \
+              --notes "Update feed for Taylor's Access Code Labs Beta on macOS." "$RUNNER_TEMP/feed/appcast.xml"
+          fi
         env:
           GH_TOKEN: ${{ github.token }}
 

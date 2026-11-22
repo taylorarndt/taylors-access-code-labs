@@ -87,6 +87,9 @@ if (!app && os === "mac") {
   const bundles = (await readdir(parent)).filter((file) => file.endsWith(".app"))
 
   if (bundles.length !== 1) throw new Error(`Expected one .app bundle in ${parent}, found ${bundles.join(", ")}`)
+  if (process.env.SPARKLE_DISTRIBUTION)
+    await $`bash sparkle/embed.sh ${path.join(parent, bundles[0])} ${process.env.SPARKLE_DISTRIBUTION}`
+
   await writeUpdateConfig(path.join(parent, bundles[0], "Contents", "Resources"))
   await $`tar -cf ${path.join(out, `opencode-desktop-mac-${cli.cpu}.app.tar`)} -C ${parent} ${bundles[0]}`
 }
